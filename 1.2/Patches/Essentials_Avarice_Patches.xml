@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/StatDef[defName = "SellPriceFactor"]</xpath>
+		<value>
+      <parts>
+			  <li Class="SyrEssentials_Avarice.StatPart_Pristine"/>
+      </parts>
+		</value>
+	</Operation>
+
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/ThingDef[@Name = "ApparelNoQualityBase"]/statBases</xpath>
+		<value>
+			<SellPriceFactor>0.2</SellPriceFactor>
+		</value>
+	</Operation>
+
+	<Operation Class="PatchOperationRemove">
+		<xpath>Defs/ThingDef[@Name = "BuildingBase"]/statBases/SellPriceFactor</xpath>
+	</Operation>
+
+	<Operation Class="PatchOperationReplace">
+		<xpath>Defs/HistoryAutoRecorderDef[defName = "Wealth_Total" or defName = "Wealth_Items" or defName = "Wealth_Buildings" or defName = "Wealth_Pawns"]/recordTicksFrequency</xpath>
+		<value>
+			<recordTicksFrequency>6000</recordTicksFrequency>
+		</value>
+	</Operation>
+
+	<Operation Class="PatchOperationInsert">
+		<xpath>Defs/HistoryAutoRecorderGroupDef[defName = "Wealth"]/historyAutoRecorderDefs/li[text() = "Wealth_Buildings"]</xpath>
+		<value>
+			<li>Wealth_Combat</li>
+		</value>
+	</Operation>
+
+</Patch>

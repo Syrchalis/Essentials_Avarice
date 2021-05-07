@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <HistoryAutoRecorderDef>
+    <defName>Wealth_Combat</defName>
+    <label>wealth (combat)</label>
+    <graphColor>(1, 0.2, 0, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_WealthCombat</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+  <HistoryAutoRecorderGroupDef>
+    <defName>Avarice</defName>
+    <label>avarice</label>
+    <historyAutoRecorderDefs>
+      <li>Avarice_Total</li>
+      <li>Avarice_Items</li>
+      <li>Avarice_Combat</li>
+      <li>Avarice_Buildings</li>
+      <li>Avarice_Pawns</li>
+    </historyAutoRecorderDefs>
+  </HistoryAutoRecorderGroupDef>
+
+  <HistoryAutoRecorderDef>
+    <defName>Avarice_Total</defName>
+    <label>avarice (total)</label>
+    <graphColor>(1, 1, 0, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_AvariceTotal</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+  <HistoryAutoRecorderDef>
+    <defName>Avarice_Items</defName>
+    <label>avarice (items)</label>
+    <graphColor>(0.91, 0.68, 0, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_AvariceItems</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+  <HistoryAutoRecorderDef>
+    <defName>Avarice_Buildings</defName>
+    <label>avarice (buildings)</label>
+    <graphColor>(0.5, 0.7, 0, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_AvariceBuildings</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+  <HistoryAutoRecorderDef>
+    <defName>Avarice_Pawns</defName>
+    <label>avarice (creatures)</label>
+    <graphColor>(0.3, 0.6, 0.48, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_AvaricePawns</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+  <HistoryAutoRecorderDef>
+    <defName>Avarice_Combat</defName>
+    <label>avarice (combat)</label>
+    <graphColor>(1, 0.2, 0, 1)</graphColor>
+    <recordTicksFrequency>6000</recordTicksFrequency>
+    <workerClass>SyrEssentials_Avarice.HistoryAutoRecorderWorker_AvariceCombat</workerClass>
+    <valueFormat>{0}</valueFormat>
+  </HistoryAutoRecorderDef>
+
+</Defs>
