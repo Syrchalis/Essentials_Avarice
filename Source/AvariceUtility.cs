@@ -169,7 +169,7 @@ namespace SyrEssentials_Avarice
         {
             return -(1 - (1 / (1 + increase)));
         }
-        public static float CalculateFactor(int count, float price, TradeAction action)
+        public static float CalculateFactorOffset(int count, float price, TradeAction action)
         {
             float factor = Mathf.Abs(price * count) / (Avarice_Settings.silverThreshold * 100);
             if (action == TradeAction.PlayerBuys)
@@ -185,16 +185,38 @@ namespace SyrEssentials_Avarice
                 return 0f;
             }
         }
+        public static void ChangePriceFactorDirect(ThingDef thingDef, Faction faction, float factorOffset)
+        {
+            float priceFactor = worldComp.tradeDataList.Find(td => td.faction == faction).itemDataList?.Find(id => id.thingDef == thingDef)?.priceFactor ?? 1f;
+            if (Avarice_Settings.priceFactorRounding)
+            {
+                priceFactor = Mathf.Clamp(GenMath.RoundTo(priceFactor + GenMath.RoundRandom(factorOffset * 100f) / 100f, 0.01f), Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+                if (priceFactor != 1f)
+                {
+                    ItemData itemData = GetItemData(thingDef, faction);
+                    itemData.priceFactor = priceFactor;
+                }
+            }
+            else
+            {
+                priceFactor = Mathf.Clamp(priceFactor + factorOffset, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+                if (priceFactor != 1f)
+                {
+                    ItemData itemData = GetItemData(thingDef, faction);
+                    itemData.priceFactor = priceFactor;
+                }
+            }
+        }
 
         public static void RegisterTrade(Thing thing, int count, float price, Faction faction, bool buying)
         {
             if (buying)
             {
-                ChangePriceFactor(thing.def, CalculateFactor(count, price, TradeAction.PlayerBuys), faction);
+                ChangePriceFactor(thing.def, CalculateFactorOffset(count, price, TradeAction.PlayerBuys), faction);
             }
             else
             {
-                ChangePriceFactor(thing.def, CalculateFactor(count, price, TradeAction.PlayerSells), faction);
+                ChangePriceFactor(thing.def, CalculateFactorOffset(count, price, TradeAction.PlayerSells), faction);
             }
         }
 
@@ -207,10 +229,11 @@ namespace SyrEssentials_Avarice
 
             if (!(worldComp.tradeDataList.Find(td => td.faction == faction) is TradeData tradeData))
             {
-                tradeData = new TradeData { faction = faction, lastTradeTick = Current.Game.tickManager.TicksGame, tile = null, itemDataList = new List<ItemData>() };
+                tradeData = new TradeData { faction = faction, lastTradeTick = Current.Game.tickManager.TicksGame - 60000, tile = null, itemDataList = new List<ItemData>() };
                 worldComp.tradeDataList.Add(tradeData);
                 ItemData itemData = new ItemData { thingDef = thingDef, priceFactor = 1f };
                 tradeData.itemDataList.Add(itemData);
+                Log.Warning("Tried getting ItemData for Essentials: Avarice and couldn't find faction.");
                 return itemData;
             }
             else
@@ -228,42 +251,38 @@ namespace SyrEssentials_Avarice
             }
         }
 
-        public static void ChangePriceFactor(ThingDef thingDef, float factor, Faction faction)
+        public static void ChangePriceFactor(ThingDef thingDef, float factorOffset, Faction faction)
         {
-            Log.Message("Factor: " + factor);
-            ItemData itemData = GetItemData(thingDef, faction);
-            //itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
-            itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + factor, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+            //Change the faction's item price for the full offset
+            ChangePriceFactorDirect(thingDef, faction, factorOffset);
+
+            //Change the items in the same sub-category for half the offset and change these items for friendly factions by a quarter of the offset
             if (!thingDef.thingCategories.NullOrEmpty())
             {
                 if (thingDef.thingCategories.Find(tc => tc.parent != null && tc.parent != ThingCategoryDefOf.Root) is ThingCategoryDef categoryWithParent)
                 {
-                    foreach (ThingDef relatedDef in thingsWithParentCategories.Where(td => !td.thingCategories.NullOrEmpty() && td.thingCategories.Contains(categoryWithParent) && td != thingDef))
+                    foreach (ThingDef influencedThingDef in thingsWithParentCategories.Where(td => !td.thingCategories.NullOrEmpty() && td.thingCategories.Contains(categoryWithParent) && td != thingDef))
                     {
-                        //Log.Message("The item " + relatedDef.label + " is in the same category (" + categoryWithParent.label + ") as " + thingDef.label);
-                        itemData = GetItemData(relatedDef, faction);
-                        itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f / 2f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
-                        foreach (Faction friendlyFaction in Find.FactionManager.AllFactions.Where(f => f.AllyOrNeutralTo(faction) && f != faction))
+                        ChangePriceFactorDirect(influencedThingDef, faction, factorOffset / 2f);
+                        foreach (Faction influencedFaction in Find.FactionManager.AllFactions.Where(f => f.AllyOrNeutralTo(faction) && f != faction && f != Faction.OfPlayer))
                         {
-                            itemData = GetItemData(relatedDef, friendlyFaction);
-                            itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f /4f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+                            ChangePriceFactorDirect(influencedThingDef, influencedFaction, factorOffset / 4f);
                         }
                     }
                 }
+                //Special case for apparel, because we want to influence the other apparel in the main category
                 if (thingDef.thingCategories.Contains(ThingCategoryDefOf.Apparel))
                 {
-                    foreach (ThingDef relatedDef in DefDatabase<ThingDef>.AllDefs.Where(td => !td.thingCategories.NullOrEmpty() && td.thingCategories.Contains(ThingCategoryDefOf.Apparel) && td != thingDef))
+                    foreach (ThingDef influencedThingDef in DefDatabase<ThingDef>.AllDefs.Where(td => !td.thingCategories.NullOrEmpty() && td.thingCategories.Contains(ThingCategoryDefOf.Apparel) && td != thingDef))
                     {
-                        //Log.Message("The item " + relatedDef.label + " is in the same category (" + ThingCategoryDefOf.Apparel.label + ") as " + thingDef.label);
-                        itemData = GetItemData(relatedDef, faction);
-                        itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f / 2f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+                        ChangePriceFactorDirect(influencedThingDef, faction, factorOffset / 2f);
                     }
                 }
             }
-            foreach (Faction friendlyFaction in Find.FactionManager.AllFactions.Where(f => f.AllyOrNeutralTo(faction) && f != faction))
+            //Change the item for friendly factions for half the offset
+            foreach (Faction influencedFaction in Find.FactionManager.AllFactions.Where(f => f.AllyOrNeutralTo(faction) && f != faction && f != Faction.OfPlayer))
             {
-                itemData = GetItemData(thingDef, friendlyFaction);
-                itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f / 2f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
+                ChangePriceFactorDirect(thingDef, influencedFaction, factorOffset / 2f);
             }
         }
     }

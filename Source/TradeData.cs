@@ -43,7 +43,6 @@ namespace SyrEssentials_Avarice
     public class WorldComponent_AvariceTradeData : WorldComponent
     {
         public List<TradeData> tradeDataList;
-        public bool factionsInit = false;
         public WorldComponent_AvariceTradeData(World world) : base(world)
         {
             tradeDataList = new List<TradeData>();
@@ -56,18 +55,13 @@ namespace SyrEssentials_Avarice
         }
         public void InitFactions()
         {
-            if (factionsInit)
-            {
-                return;
-            }
-            foreach (Faction faction in Find.FactionManager.AllFactionsVisible.Where(f => f.def.CanEverBeNonHostile))
+            foreach (Faction faction in Find.FactionManager.AllFactionsVisible.Where(f => f.def.CanEverBeNonHostile && f != Faction.OfPlayer))
             {
                 if (!tradeDataList.Any(td => td.faction == faction))
                 {
-                    tradeDataList.Add(new TradeData { faction = faction, lastTradeTick = 0, tile = null, itemDataList = new List<ItemData>() });
+                    tradeDataList.Add(new TradeData { faction = faction, lastTradeTick = -60000, tile = null, itemDataList = new List<ItemData>() });
                 }
             }
-            factionsInit = true;
         }
     }
 }

@@ -27,6 +27,8 @@ namespace SyrEssentials_Avarice
         }
     }
 
+    //Pristine Patches
+
     [HarmonyPatch(typeof(GenRecipe), "PostProcessProduct")]
     public static class PostProcessProductPatch
     {
@@ -95,6 +97,8 @@ namespace SyrEssentials_Avarice
             }
         }
     }
+
+    //Wealth Patches
 
     [HarmonyPatch(typeof(Map), nameof(Map.PlayerWealthForStoryteller), MethodType.Getter)]
     public static class PlayerWealthForStorytellerPatch
@@ -195,52 +199,35 @@ namespace SyrEssentials_Avarice
         };
     }
 
-    //Caching to reduce re-caching of InitPriceDataIfNeeded
-    [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.CountToTransfer), MethodType.Setter)]
-    public static class CountToTransferPatch
+    //Trading Patches
+
+    [HarmonyPatch(typeof(Dialog_Trade), MethodType.Constructor, new Type[] { typeof(Pawn), typeof(ITrader), typeof(bool) })]
+    public static class Dialog_TradePatch
     {
-        [HarmonyPostfix]
-        public static void CountToTransfer_Postfix(ref int __0, ref float ___pricePlayerBuy, Tradeable __instance)
+        [HarmonyPrefix]
+        public static void Dialog_Trade_Prefix(Pawn playerNegotiator, ITrader trader)
         {
-            Thing thing = __instance.AnyThing;
-            if (thingIDToTickCount.TryGetValue(thing.thingIDNumber, out var store) && store.First == GenTicks.TicksGame && store.Second == __0)
+            if (AvariceUtility.worldComp == null)
+            {
+                AvariceUtility.worldComp = Current.Game.World.GetComponent<WorldComponent_AvariceTradeData>();
+            }
+            TradeData tradeData = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == trader.Faction);
+            if (tradeData == null)
+            {
+                AvariceUtility.worldComp.InitFactions();
+                tradeData = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == trader.Faction);
+            }
+            if (AvariceUtility.worldComp.tradeDataList.Any(td => td.faction == trader.Faction && Find.TickManager.TicksGame < td.lastTradeTick + GenDate.TicksPerDay))
             {
                 return;
             }
-            thingIDToTickCount[thing.thingIDNumber] = new Pair<int, int>(GenTicks.TicksGame, __0);
-            ___pricePlayerBuy = 0f;
-        }
-        public static Dictionary<int, Pair<int, int>> thingIDToTickCount = new Dictionary<int, Pair<int, int>>();
-    }
-
-    //Caching GetMarketValue to massively reduce impact of UI methods
-    [HarmonyPatch]
-    public static class GetPricePlayerBuyPatch
-    {
-        [HarmonyTargetMethods]
-        public static IEnumerable<MethodInfo> GetMarketValueMethods()
-        {
-            yield return AccessTools.Method(typeof(TradeUtility), nameof(TradeUtility.GetPricePlayerBuy));
-            yield return AccessTools.Method(typeof(TradeUtility), nameof(TradeUtility.GetPricePlayerSell));
-        }
-        [HarmonyTranspiler]
-        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-        {
-            return instructions.MethodReplacer(AccessTools.PropertyGetter(typeof(Thing), nameof(Thing.MarketValue)), AccessTools.Method(typeof(GetPricePlayerBuyPatch), nameof(GetPricePlayerBuyPatch.GetMarketValue_Cached)));
-        }
-        public static Dictionary<int, Pair<int, float>> thingIDToTickPrice = new Dictionary<int, Pair<int, float>>();
-        public static float GetMarketValue_Cached(Thing thing)
-        {
-            if (thingIDToTickPrice.TryGetValue(thing.thingIDNumber, out var store) && store.First == GenTicks.TicksGame)
+            else
             {
-                return store.Second;
+                Log.Message("Dialog_Trade_Prefix");
             }
-            var value = thing.GetStatValue(StatDefOf.MarketValue);
-            thingIDToTickPrice[thing.thingIDNumber] = new Pair<int, float>(GenTicks.TicksGame, value);
-            return value;
+            tradeData.lastTradeTick = Find.TickManager.TicksGame;
         }
     }
-
 
     [HarmonyPatch(typeof(Tradeable), "InitPriceDataIfNeeded")]
     public static class InitPriceDataIfNeededPatch
@@ -334,30 +321,11 @@ namespace SyrEssentials_Avarice
             }
             else
             {
-                if (AvariceUtility.worldComp == null)
-                {
-                    AvariceUtility.worldComp = Current.Game.World.GetComponent<WorldComponent_AvariceTradeData>();
-                }
-                if (!AvariceUtility.worldComp.factionsInit)
-                {
-                    AvariceUtility.worldComp.InitFactions();
-                }
                 TradeAction action = tradeable.ActionToDo;
-                ItemData itemData = AvariceUtility.GetItemData(thingdef, trader.Faction);
-                float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                //Log.Message(tradeable.ThingDef.label + ": " + itemData.priceFactor + " | " + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action));
-                return (itemData.priceFactor + itemData.priceFactor + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
-                /*if ()
-                {
-
-                }
-                else
-                {
-                    float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier(), TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                    float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier(), TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                    return (1f + 1f + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
-                }*/
+                float currentPriceFactor = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == trader.Faction).itemDataList?.Find(id => id.thingDef == thingdef)?.priceFactor ?? 1f;
+                float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier() * currentPriceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
+                float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier() * currentPriceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
+                return (currentPriceFactor + currentPriceFactor + AvariceUtility.CalculateFactorOffset(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
             }
         }
     }
@@ -485,8 +453,8 @@ namespace SyrEssentials_Avarice
         {
             if (toGive.def != ThingDefOf.Silver)
             {
-                ItemData itemData = AvariceUtility.GetItemData(toGive.def, TradeSession.trader.Faction);
-                float normalBuyPrice = TradeUtility.GetPricePlayerBuy(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerBuys).PriceMultiplier() * itemData.priceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 0.714285f */;
+                float currentPriceFactor = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == TradeSession.trader.Faction).itemDataList?.Find(id => id.thingDef == toGive.def)?.priceFactor ?? 1f;
+                float normalBuyPrice = TradeUtility.GetPricePlayerBuy(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerBuys).PriceMultiplier() * currentPriceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 0.714285f */;
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalBuyPrice, TradeSession.trader.Faction, true);
             }
         }
@@ -507,10 +475,56 @@ namespace SyrEssentials_Avarice
         {
             if (toGive.def != ThingDefOf.Silver)
             {
-                ItemData itemData = AvariceUtility.GetItemData(toGive.def, TradeSession.trader.Faction);
-                float normalSellPrice = TradeUtility.GetPricePlayerSell(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerSells).PriceMultiplier() * itemData.priceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 1.66666666f */;
+                float currentPriceFactor = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == TradeSession.trader.Faction).itemDataList?.Find(id => id.thingDef == toGive.def)?.priceFactor ?? 1f;
+                float normalSellPrice = TradeUtility.GetPricePlayerSell(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerSells).PriceMultiplier() * currentPriceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 1.66666666f */;
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalSellPrice, TradeSession.trader.Faction, false);
             }
+        }
+    }
+
+    //Caching to reduce re-caching of InitPriceDataIfNeeded
+    [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.CountToTransfer), MethodType.Setter)]
+    public static class CountToTransferPatch
+    {
+        [HarmonyPostfix]
+        public static void CountToTransfer_Postfix(ref int __0, ref float ___pricePlayerBuy, Tradeable __instance)
+        {
+            Thing thing = __instance.AnyThing;
+            if (thingIDToTickCount.TryGetValue(thing.thingIDNumber, out var store) && store.First == GenTicks.TicksGame && store.Second == __0)
+            {
+                return;
+            }
+            thingIDToTickCount[thing.thingIDNumber] = new Pair<int, int>(GenTicks.TicksGame, __0);
+            ___pricePlayerBuy = 0f;
+        }
+        public static Dictionary<int, Pair<int, int>> thingIDToTickCount = new Dictionary<int, Pair<int, int>>();
+    }
+
+    //Caching GetMarketValue to massively reduce impact of UI methods
+    [HarmonyPatch]
+    public static class GetPricePlayerBuyPatch
+    {
+        [HarmonyTargetMethods]
+        public static IEnumerable<MethodInfo> GetMarketValueMethods()
+        {
+            yield return AccessTools.Method(typeof(TradeUtility), nameof(TradeUtility.GetPricePlayerBuy));
+            yield return AccessTools.Method(typeof(TradeUtility), nameof(TradeUtility.GetPricePlayerSell));
+        }
+        [HarmonyTranspiler]
+        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            return instructions.MethodReplacer(AccessTools.PropertyGetter(typeof(Thing), nameof(Thing.MarketValue)), AccessTools.Method(typeof(GetPricePlayerBuyPatch), nameof(GetPricePlayerBuyPatch.GetMarketValue_Cached)));
+        }
+        public static Dictionary<int, Pair<int, float>> thingIDToTickPrice = new Dictionary<int, Pair<int, float>>();
+        public static float GetMarketValue_Cached(Thing thing)
+        {
+            if (thingIDToTickPrice.TryGetValue(thing.thingIDNumber, out var store) && store.First == GenTicks.TicksGame)
+            {
+                return store.Second;
+            }
+            var value = thing.GetStatValue(StatDefOf.MarketValue);
+            thingIDToTickPrice[thing.thingIDNumber] = new Pair<int, float>(GenTicks.TicksGame, value);
+            return value;
         }
     }
 }

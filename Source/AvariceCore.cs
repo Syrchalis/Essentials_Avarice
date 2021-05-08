@@ -55,6 +55,22 @@ namespace SyrEssentials_Avarice
         public override void WriteSettings()
         {
             base.WriteSettings();
+            if (!Avarice_Settings.pristineModule)
+            {
+                foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefs.Where(td => !td.thingCategories.NullOrEmpty() && (td.thingCategories.Contains(ThingCategoryDefOf.Apparel) 
+                || td.thingCategories.Any(tc => tc.Parents.Contains(ThingCategoryDefOf.Apparel))) && td.statBases.Any(sm => sm.stat == StatDefOf.SellPriceFactor && sm.value == 0.2f)))
+                {
+                    thingDef.statBases.Find(sm => sm.stat == StatDefOf.SellPriceFactor && sm.value == 0.2f).value = 1f;
+                }
+            }
+            else
+            {
+                foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefs.Where(td => !td.thingCategories.NullOrEmpty() && (td.thingCategories.Contains(ThingCategoryDefOf.Apparel)
+                || td.thingCategories.Any(tc => tc.Parents.Contains(ThingCategoryDefOf.Apparel))) && td.statBases.Any(sm => sm.stat == StatDefOf.SellPriceFactor && sm.value == 1f)))
+                {
+                    thingDef.statBases.Find(sm => sm.stat == StatDefOf.SellPriceFactor && sm.value == 1f).value = 0.2f;
+                }
+            }
         }
     }
     public class Avarice_Settings : ModSettings
@@ -68,16 +84,18 @@ namespace SyrEssentials_Avarice
         public static float traderMultiplierChance = 0.25f;
         public static float pristineValue = 0.25f;
 
+        //Not yet implemented in settings, only in code
         public static int silverThreshold = 100;
+        public static bool priceFactorRounding = false;
 
         public const float minTradeValue = 0.5f;
         public const float maxTradeValue = 2.0f;
         public override void ExposeData()
         {
             base.ExposeData();
-            Scribe_Values.Look<bool>(ref wealthModule, "Avarice_logPointCalc", true, false);
-            Scribe_Values.Look<bool>(ref pristineModule, "Avarice_logPointCalc", true, false);
-            Scribe_Values.Look<bool>(ref tradeModule, "Avarice_logPointCalc", true, false);
+            Scribe_Values.Look<bool>(ref wealthModule, "Avarice_wealthModule", true, false);
+            Scribe_Values.Look<bool>(ref pristineModule, "Avarice_pristineModule", true, false);
+            Scribe_Values.Look<bool>(ref tradeModule, "Avarice_tradeModule", true, false);
 
             Scribe_Values.Look<bool>(ref logPointCalc, "Avarice_logPointCalc", false, false);
             Scribe_Values.Look<int>(ref startingWealth, "Avarice_startingWealth", 14000, false);
