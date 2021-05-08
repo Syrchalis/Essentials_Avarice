@@ -62,7 +62,10 @@ namespace SyrEssentials_Avarice
             }
             foreach (Faction faction in Find.FactionManager.AllFactionsVisible.Where(f => f.def.CanEverBeNonHostile))
             {
-                tradeDataList.Add(new TradeData { faction = faction, lastTradeTick = 0, tile = null, itemDataList = new List<ItemData>() });
+                if (!tradeDataList.Any(td => td.faction == faction))
+                {
+                    tradeDataList.Add(new TradeData { faction = faction, lastTradeTick = 0, tile = null, itemDataList = new List<ItemData>() });
+                }
             }
             factionsInit = true;
         }

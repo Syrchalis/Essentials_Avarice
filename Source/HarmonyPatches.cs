@@ -195,6 +195,7 @@ namespace SyrEssentials_Avarice
         };
     }
 
+    //Caching to reduce re-caching of InitPriceDataIfNeeded
     [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.CountToTransfer), MethodType.Setter)]
     public static class CountToTransferPatch
     {
@@ -212,6 +213,7 @@ namespace SyrEssentials_Avarice
         public static Dictionary<int, Pair<int, int>> thingIDToTickCount = new Dictionary<int, Pair<int, int>>();
     }
 
+    //Caching GetMarketValue to massively reduce impact of UI methods
     [HarmonyPatch]
     public static class GetPricePlayerBuyPatch
     {
@@ -341,18 +343,21 @@ namespace SyrEssentials_Avarice
                     AvariceUtility.worldComp.InitFactions();
                 }
                 TradeAction action = tradeable.ActionToDo;
-                if (AvariceUtility.GetItemData(thingdef, trader.Faction) is ItemData itemData)
+                ItemData itemData = AvariceUtility.GetItemData(thingdef, trader.Faction);
+                float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
+                float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
+                //Log.Message(tradeable.ThingDef.label + ": " + itemData.priceFactor + " | " + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action));
+                return (itemData.priceFactor + itemData.priceFactor + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
+                /*if ()
                 {
-                    float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                    float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier() * itemData.priceFactor, TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
-                    return (itemData.priceFactor + 1f + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
+
                 }
                 else
                 {
                     float pricePlayerBuy = TradeUtility.GetPricePlayerBuy(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerBuys).PriceMultiplier(), TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
                     float pricePlayerSell = TradeUtility.GetPricePlayerSell(tradeable.AnyThing, tradeable.PriceTypeFor(TradeAction.PlayerSells).PriceMultiplier(), TradeSession.playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer);
                     return (1f + 1f + AvariceUtility.CalculateFactor(tradeable.CountToTransfer, action == TradeAction.PlayerBuys ? pricePlayerBuy : pricePlayerSell, action)) / 2f;
-                }
+                }*/
             }
         }
     }
@@ -381,7 +386,6 @@ namespace SyrEssentials_Avarice
             float baseFactor = TradeSession.trader.TradePriceImprovementOffsetForPlayer;
             float normalBuyPrice = TradeUtility.GetPricePlayerBuy(trad.AnyThing, 1f, playerNegotiatorFactor, baseFactor);
             float normalSellPrice = TradeUtility.GetPricePlayerSell(trad.AnyThing, 1f, playerNegotiatorFactor, baseFactor, TradeSession.TradeCurrency);
-            //float price = AvariceUtility.CalculatePrice(trad, action);
             float price = trad.GetPriceFor(action);
             int expensive = 0;
             if (action == TradeAction.PlayerBuys)
@@ -471,7 +475,7 @@ namespace SyrEssentials_Avarice
             {
                 yield return AccessTools.Method(Type.GetType("TraderShips.LandedShip, TraderShips"), "GiveSoldThingToPlayer");
             }
-            yield return AccessTools.Method(typeof(Pawn_TraderTracker), nameof(Pawn_TraderTracker.GiveSoldThingToPlayer));
+            yield return AccessTools.Method(typeof(Pawn), nameof(Pawn.GiveSoldThingToPlayer));
             yield return AccessTools.Method(typeof(Caravan), nameof(Caravan.GiveSoldThingToPlayer));
             yield return AccessTools.Method(typeof(Settlement), nameof(Settlement.GiveSoldThingToPlayer));
             yield return AccessTools.Method(typeof(TradeShip), nameof(TradeShip.GiveSoldThingToPlayer));
@@ -479,10 +483,10 @@ namespace SyrEssentials_Avarice
         [HarmonyPrefix]
         public static void TradeBuyPrefix(Thing toGive, int countToGive, Pawn playerNegotiator)
         {
-            //Do stuff
             if (toGive.def != ThingDefOf.Silver)
             {
-                float normalBuyPrice = TradeUtility.GetPricePlayerBuy(toGive, 1f, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 0.714285f */;
+                ItemData itemData = AvariceUtility.GetItemData(toGive.def, TradeSession.trader.Faction);
+                float normalBuyPrice = TradeUtility.GetPricePlayerBuy(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerBuys).PriceMultiplier() * itemData.priceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 0.714285f */;
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalBuyPrice, TradeSession.trader.Faction, true);
             }
         }
@@ -493,7 +497,7 @@ namespace SyrEssentials_Avarice
         [HarmonyTargetMethods]
         public static IEnumerable<MethodInfo> TradeSellMethods()
         {
-            yield return AccessTools.Method(typeof(Pawn_TraderTracker), nameof(Pawn_TraderTracker.GiveSoldThingToTrader));
+            yield return AccessTools.Method(typeof(Pawn), nameof(Pawn.GiveSoldThingToTrader));
             yield return AccessTools.Method(typeof(Caravan), nameof(Caravan.GiveSoldThingToTrader));
             yield return AccessTools.Method(typeof(Settlement), nameof(Settlement.GiveSoldThingToTrader));
             yield return AccessTools.Method(typeof(TradeShip), nameof(TradeShip.GiveSoldThingToTrader));
@@ -501,10 +505,10 @@ namespace SyrEssentials_Avarice
         [HarmonyPrefix]
         public static void TradeSellPrefix(Thing toGive, int countToGive, Pawn playerNegotiator)
         {
-            //Do stuff
             if (toGive.def != ThingDefOf.Silver)
             {
-                float normalSellPrice = TradeUtility.GetPricePlayerSell(toGive, 1f, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer, TradeCurrency.Silver) /* 1.66666666f */;
+                ItemData itemData = AvariceUtility.GetItemData(toGive.def, TradeSession.trader.Faction);
+                float normalSellPrice = TradeUtility.GetPricePlayerSell(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerSells).PriceMultiplier() * itemData.priceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 1.66666666f */;
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalSellPrice, TradeSession.trader.Faction, false);
             }
         }

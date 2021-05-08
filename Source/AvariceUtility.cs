@@ -230,6 +230,7 @@ namespace SyrEssentials_Avarice
 
         public static void ChangePriceFactor(ThingDef thingDef, float factor, Faction faction)
         {
+            Log.Message("Factor: " + factor);
             ItemData itemData = GetItemData(thingDef, faction);
             //itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + GenMath.RoundRandom(factor * 100f) / 100f, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
             itemData.priceFactor = Mathf.Clamp(itemData.priceFactor + factor, Avarice_Settings.minTradeValue, Avarice_Settings.maxTradeValue);
