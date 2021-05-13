@@ -11,10 +11,10 @@ namespace SyrEssentials_Avarice
 {
     public class AvariceCore : Mod
     {
-        public static Avarice_Settings settings;
+        public static AvariceSettings settings;
         public AvariceCore(ModContentPack content) : base(content)
         {
-            settings = GetSettings<Avarice_Settings>();
+            settings = GetSettings<AvariceSettings>();
         }
         public override string SettingsCategory() => "Avarice_SettingsCategory".Translate();
 
@@ -24,28 +24,28 @@ namespace SyrEssentials_Avarice
             {
                 Listing_Standard listing_Standard = new Listing_Standard();
                 listing_Standard.Begin(inRect);
-                string startingWealthLabel = Avarice_Settings.startingWealth.ToString();
+                string startingWealthLabel = AvariceSettings.startingWealth.ToString();
 
-                listing_Standard.CheckboxLabeled("Avarice_enableWealthModule".Translate(), ref Avarice_Settings.wealthModule, "Avarice_enableWealthModuleTooltip".Translate());
-                listing_Standard.CheckboxLabeled("Avarice_enablePristineModule".Translate(), ref Avarice_Settings.pristineModule, "Avarice_enablePristineModuleTooltip".Translate());
-                listing_Standard.CheckboxLabeled("Avarice_enableTradeModule".Translate(), ref Avarice_Settings.tradeModule, "Avarice_enableTradeModuleTooltip".Translate());
+                listing_Standard.CheckboxLabeled("Avarice_enableWealthModule".Translate(), ref AvariceSettings.wealthModule, "Avarice_enableWealthModuleTooltip".Translate());
+                listing_Standard.CheckboxLabeled("Avarice_enableLegitimateModule".Translate(), ref AvariceSettings.legitimateModule, "Avarice_enableLegitimateModuleTooltip".Translate());
+                listing_Standard.CheckboxLabeled("Avarice_enableTradeModule".Translate(), ref AvariceSettings.tradeModule, "Avarice_enableTradeModuleTooltip".Translate());
                 listing_Standard.GapLine();
 
-                listing_Standard.Label("Avarice_TraderMultiplierChance".Translate() + ": " + Avarice_Settings.traderMultiplierChance.ToStringPercent(), tooltip: "Avarice_TraderMultiplierChanceTooltip".Translate());
+                listing_Standard.Label("Avarice_TraderMultiplierChance".Translate() + ": " + AvariceSettings.traderMultiplierChance.ToStringPercent(), tooltip: "Avarice_TraderMultiplierChanceTooltip".Translate());
                 listing_Standard.Gap(6);
-                Avarice_Settings.traderMultiplierChance = listing_Standard.Slider(GenMath.RoundTo(Avarice_Settings.traderMultiplierChance, 0.05f), 0f, 1f);
+                AvariceSettings.traderMultiplierChance = listing_Standard.Slider(GenMath.RoundTo(AvariceSettings.traderMultiplierChance, 0.05f), 0f, 1f);
                 listing_Standard.Gap(12);
 
-                listing_Standard.Label("Avarice_PristineValue".Translate() + ": " + Avarice_Settings.pristineValue.ToStringByStyle(ToStringStyle.FloatOne), tooltip: "Avarice_PristineValueTooltip".Translate());
+                listing_Standard.Label("Avarice_LegitimateValue".Translate() + ": " + AvariceSettings.legitimateValue.ToStringByStyle(ToStringStyle.FloatOne), tooltip: "Avarice_LegitimateValueTooltip".Translate());
                 listing_Standard.Gap(6);
-                Avarice_Settings.pristineValue = listing_Standard.Slider(GenMath.RoundTo(Avarice_Settings.pristineValue, 0.1f), 0f, 5f);
+                AvariceSettings.legitimateValue = listing_Standard.Slider(GenMath.RoundTo(AvariceSettings.legitimateValue, 0.1f), 0f, 5f);
                 listing_Standard.Gap(12);
 
                 listing_Standard.Label("Avarice_StartingWealth".Translate(), tooltip: "Avarice_StartingWealthTooltip".Translate());
-                listing_Standard.TextFieldNumeric(ref Avarice_Settings.startingWealth, ref startingWealthLabel, 0, 100000);
+                listing_Standard.TextFieldNumeric(ref AvariceSettings.startingWealth, ref startingWealthLabel, 0, 100000);
                 listing_Standard.Gap(12);
 
-                listing_Standard.CheckboxLabeled("Avarice_LogPointCalc".Translate(), ref Avarice_Settings.logPointCalc, "Avarice_LogPointCalcTooltip".Translate());
+                listing_Standard.CheckboxLabeled("Avarice_LogPointCalc".Translate(), ref AvariceSettings.logPointCalc, "Avarice_LogPointCalcTooltip".Translate());
 
                 listing_Standard.End();
                 settings.Write();
@@ -55,7 +55,7 @@ namespace SyrEssentials_Avarice
         public override void WriteSettings()
         {
             base.WriteSettings();
-            if (!Avarice_Settings.pristineModule)
+            if (!AvariceSettings.legitimateModule)
             {
                 foreach (ThingDef thingDef in DefDatabase<ThingDef>.AllDefs.Where(td => !td.thingCategories.NullOrEmpty() && (td.thingCategories.Contains(ThingCategoryDefOf.Apparel) 
                 || td.thingCategories.Any(tc => tc.Parents.Contains(ThingCategoryDefOf.Apparel))) && td.statBases.Any(sm => sm.stat == StatDefOf.SellPriceFactor && sm.value == 0.2f)))
@@ -73,20 +73,23 @@ namespace SyrEssentials_Avarice
             }
         }
     }
-    public class Avarice_Settings : ModSettings
+    public class AvariceSettings : ModSettings
     {
         public static bool wealthModule = true;
-        public static bool pristineModule = true;
+        public static bool legitimateModule = true;
         public static bool tradeModule = true;
 
         public static bool logPointCalc = false;
         public static int startingWealth = 14000;
         public static float traderMultiplierChance = 0.25f;
-        public static float pristineValue = 0.25f;
+        public static float legitimateValue = 1.0f;
 
         //Not yet implemented in settings, only in code
+        public static float normalisationPerDay = 0.01f;
         public static int silverThreshold = 100;
         public static bool priceFactorRounding = false;
+        public static float sellFactor = 1.0f;
+        public static float buyFactor = 1.0f;
 
         public const float minTradeValue = 0.5f;
         public const float maxTradeValue = 2.0f;
@@ -94,13 +97,13 @@ namespace SyrEssentials_Avarice
         {
             base.ExposeData();
             Scribe_Values.Look<bool>(ref wealthModule, "Avarice_wealthModule", true, false);
-            Scribe_Values.Look<bool>(ref pristineModule, "Avarice_pristineModule", true, false);
+            Scribe_Values.Look<bool>(ref legitimateModule, "Avarice_legitimateModule", true, false);
             Scribe_Values.Look<bool>(ref tradeModule, "Avarice_tradeModule", true, false);
 
             Scribe_Values.Look<bool>(ref logPointCalc, "Avarice_logPointCalc", false, false);
             Scribe_Values.Look<int>(ref startingWealth, "Avarice_startingWealth", 14000, false);
             Scribe_Values.Look<float>(ref traderMultiplierChance, "Avarice_traderMultiplierChance", 0.25f, false);
-            Scribe_Values.Look<float>(ref pristineValue, "Avarice_pristineValue", 1.0f, false);
+            Scribe_Values.Look<float>(ref legitimateValue, "Avarice_legitimateValue", 1.0f, false);
         }
     }
 }

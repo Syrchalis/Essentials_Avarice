@@ -5,20 +5,22 @@
 
 	<Avarice_enableWealthModule>Wealth module</Avarice_enableWealthModule>
   <Avarice_enableWealthModuleTooltip>Enables new player wealth calculation with less focus on general items and more on actual combat items</Avarice_enableWealthModuleTooltip>
-  <Avarice_enablePristineModule>Pristine module</Avarice_enablePristineModule>
-  <Avarice_enablePristineModuleTooltip>Enables crafted items being marked as pristine, increasing their value</Avarice_enablePristineModuleTooltip>
+  <Avarice_enableLegitimateModule>Legitimate module</Avarice_enableLegitimateModule>
+  <Avarice_enableLegitimateModuleTooltip>Enables crafted items being marked as legitimate, increasing their value</Avarice_enableLegitimateModuleTooltip>
   <Avarice_enableTradeModule>Trade module</Avarice_enableTradeModule>
   <Avarice_enableTradeModuleTooltip>Enables price fluctuations among traders</Avarice_enableTradeModuleTooltip>
   <Avarice_TraderMultiplierChance>Price fluctuation chance</Avarice_TraderMultiplierChance>
 	<Avarice_TraderMultiplierChanceTooltip>Chance that a category on a trader has a price fluctuation</Avarice_TraderMultiplierChanceTooltip>
-  <Avarice_PristineValue>Pristine multiplier</Avarice_PristineValue>
-  <Avarice_PristineValueTooltip>The multiplier for pristine (player-crafted) items, can be set to below 1.0 if you want player-crafted items to be worth less</Avarice_PristineValueTooltip>
+  <Avarice_LegitimateValue>Legitimate multiplier</Avarice_LegitimateValue>
+  <Avarice_LegitimateValueTooltip>The multiplier for legitimate (player-crafted and traded) items</Avarice_LegitimateValueTooltip>
 	<Avarice_StartingWealth>Starting wealth</Avarice_StartingWealth>
 	<Avarice_StartingWealthTooltip>Set this value to the avarice value a new naked brutality game would have in your game setup</Avarice_StartingWealthTooltip>
 	<Avarice_LogPointCalc>Log raid point calculation</Avarice_LogPointCalc>
 	<Avarice_LogPointCalcTooltip>Enable this to get a log message detailing the various values that make up the calculation for raid points - definitely enable this if you have issues with raids being too large or too small</Avarice_LogPointCalcTooltip>
 
-	<StatsReport_Pristine>Value set to {0} due to pristine</StatsReport_Pristine>
+	<StatsReport_Legitimate>Value set to {0} due to legitimate</StatsReport_Legitimate>
+
+  <Avarice_LegitimateChar>L</Avarice_LegitimateChar>
 
 	<Avarice_TraderTypePrice>price fluctuation</Avarice_TraderTypePrice>
 

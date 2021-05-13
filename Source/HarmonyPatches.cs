@@ -27,67 +27,71 @@ namespace SyrEssentials_Avarice
         }
     }
 
-    //Pristine Patches
+    //------------------------------------ Legitimate Patches ------------------------------------
 
+    //Makes crafted items legitimate if they satisfy the conditions
     [HarmonyPatch(typeof(GenRecipe), "PostProcessProduct")]
     public static class PostProcessProductPatch
     {
         [HarmonyPostfix]
         public static void PostProcessProduct_Postfix(Thing __result, Thing product, RecipeDef recipeDef, Pawn worker)
         {
-            if (product.def.thingCategories.Contains(ThingCategoryDefOf.Apparel) || product.def.thingCategories.Any(tc => tc.Parents.Contains(ThingCategoryDefOf.Apparel))
-                    || product.def.thingCategories.Contains(ThingCategoryDefOf.Weapons) || product.def.thingCategories.Any(tc => tc.Parents.Contains(ThingCategoryDefOf.Weapons)))
+            if (AvariceUtility.SatisfiesLegitimateConditions(__result.def))
             {
-                CompPristine comp = product.TryGetComp<CompPristine>();
+                CompLegitimate comp = product.TryGetComp<CompLegitimate>();
                 if (comp != null)
                 {
-                    comp.pristine = true;
+                    comp.legitimate = true;
                 }
             }
         }
     }
 
-    [HarmonyPatch(typeof(GenLabel), "NewThingLabel", new Type[] { typeof(Thing), typeof(int), typeof(bool) })]
-    public static class NewThingLabelPatch
+    //Adds "L" affix to legitimate things
+    [HarmonyPatch(typeof(Thing), nameof(Thing.LabelNoCount), MethodType.Getter)]
+    public static class ThingLabelPatch
     {
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> NewThingLabel_Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-            MethodInfo PristineString = AccessTools.Method(typeof(NewThingLabelPatch), nameof(NewThingLabelPatch.PristineString));
-            MethodInfo ConcatString = AccessTools.Method(typeof(String), nameof(String.Concat), new Type[] { typeof(string), typeof(string) });
+            MethodInfo LegitimateString = AccessTools.Method(typeof(ThingLabelPatch), nameof(ThingLabelPatch.LegitimateString));
             foreach (CodeInstruction i in instructions)
             {
-                if (i.opcode == OpCodes.Ldstr && (string)i.operand == ")")
+                if (i.opcode == OpCodes.Ret)
                 {
                     yield return new CodeInstruction(OpCodes.Ldarg_0);
-                    yield return new CodeInstruction(OpCodes.Call, PristineString);
-                    yield return new CodeInstruction(OpCodes.Call, ConcatString);
+                    yield return new CodeInstruction(OpCodes.Call, LegitimateString);
                 }
                 yield return i;
             }
         }
-        public static string PristineString(Thing t)
+        public static string LegitimateString(string s, Thing t)
         {
-            CompPristine comp = t.TryGetComp<CompPristine>();
-            if (comp != null && comp.pristine && Avarice_Settings.pristineModule)
+            CompLegitimate comp = t.TryGetComp<CompLegitimate>();
+            if (comp != null && comp.legitimate && AvariceSettings.legitimateModule)
             {
-                return " P";
+                int index = s.LastIndexOf(')');
+                if (index <= 0)
+                {
+                    index = s.Length;
+                }
+                return s.Insert(index, " " + "Avarice_LegitimateChar".Translate());
             }
             else
             {
-                return "";
+                return s;
             }
         }
     }
 
-    //Disables the price reduction of tainted apparel because we give apparel a sell price multiplier
+    //Disables the price reduction of tainted apparel because apparel is given a sell price multiplier
     [HarmonyPatch(typeof(StatPart_WornByCorpse), nameof(StatPart_WornByCorpse.TransformValue))]
     public static class TransformValuePatch
     {
         [HarmonyPrefix]
         public static bool TransformValue_Prefix(StatRequest req, ref float val)
         {
-            if (Avarice_Settings.pristineModule)
+            if (AvariceSettings.legitimateModule)
             {
                 return false;
             }
@@ -98,15 +102,16 @@ namespace SyrEssentials_Avarice
         }
     }
 
-    //Wealth Patches
+    //------------------------------------ Wealth Patches ------------------------------------
 
+    //Swaps wealth calculation if on home map
     [HarmonyPatch(typeof(Map), nameof(Map.PlayerWealthForStoryteller), MethodType.Getter)]
     public static class PlayerWealthForStorytellerPatch
     {
         [HarmonyPrefix]
         public static bool PlayerWealthForStoryteller_Prefix(ref float __result, Map __instance)
         {
-            if (__instance.IsPlayerHome && Avarice_Settings.wealthModule)
+            if (__instance.IsPlayerHome && AvariceSettings.wealthModule)
             {
                 __result = AvariceUtility.CalculateTotalAvarice(__instance);
                 return false;
@@ -118,13 +123,14 @@ namespace SyrEssentials_Avarice
         }
     }
 
+    //New wealth calculation
     [HarmonyPatch(typeof(StorytellerUtility), nameof(StorytellerUtility.DefaultThreatPointsNow))]
     public static class DefaultThreatPointsNowPatch
     {
         [HarmonyPrefix]
         public static bool DefaultThreatPointsNow_Prefix(ref float __result, IIncidentTarget target)
         {
-            if (!Avarice_Settings.wealthModule)
+            if (!AvariceSettings.wealthModule)
             {
                 return true;
             }
@@ -168,14 +174,13 @@ namespace SyrEssentials_Avarice
                 }
             }
             float combinedPoints = (avaricePoints + pawnPoints) * target.IncidentPointsRandomFactorRange.RandomInRange;
-            //adaptionEffectFactor is 1 for all difficulties as of 1.1
-            float adaptionFactor = Mathf.Lerp(1f, Find.StoryWatcher.watcherAdaptation.TotalThreatPointsFactor, Find.Storyteller.difficulty.adaptationEffectFactor);
-            __result = Mathf.Clamp(combinedPoints * adaptionFactor * Find.Storyteller.difficulty.threatScale
+            float adaptionFactor = Mathf.Lerp(1f, Find.StoryWatcher.watcherAdaptation.TotalThreatPointsFactor, Find.Storyteller.difficultyValues.adaptationEffectFactor);
+            __result = Mathf.Clamp(combinedPoints * adaptionFactor * Find.Storyteller.difficultyValues.threatScale
                                     * Find.Storyteller.def.pointsFactorFromDaysPassed.Evaluate(GenDate.DaysPassed), 35f, 10000f);
-            if (Avarice_Settings.logPointCalc)
+            if (AvariceSettings.logPointCalc)
             {
                 Log.Message("[Essentials: Avarice] (Points from Avarice: " + avaricePoints + " + Points from Pawns: " + pawnPoints
-                            + ") * Adaption Factor: " + adaptionFactor + " * Difficulty Factor: " + Find.Storyteller.difficulty.threatScale
+                            + ") * Adaption Factor: " + adaptionFactor + " * Difficulty Factor: " + Find.Storyteller.difficultyValues.threatScale
                             + " * Time Factor: " + Find.Storyteller.def.pointsFactorFromDaysPassed.Evaluate(GenDate.DaysPassed) + " = " + __result);
             }
             return false;
@@ -184,7 +189,7 @@ namespace SyrEssentials_Avarice
         public static SimpleCurve PointsPerWealthCurve = new SimpleCurve
         {
             new CurvePoint(0f, 0f),
-            new CurvePoint(Avarice_Settings.startingWealth, 0f),
+            new CurvePoint(AvariceSettings.startingWealth, 0f),
             new CurvePoint(400000f, 1400f),
             new CurvePoint(700000f, 2100f),
             new CurvePoint(1000000f, 2450f)
@@ -192,21 +197,26 @@ namespace SyrEssentials_Avarice
         public static SimpleCurve PointsPerPawnByWealthCurve = new SimpleCurve
         {
             new CurvePoint(0f, 20f),
-            new CurvePoint(Avarice_Settings.startingWealth, 20f),
+            new CurvePoint(AvariceSettings.startingWealth, 20f),
             new CurvePoint(400000f, 240f),
             new CurvePoint(700000f, 300f),
             new CurvePoint(1000000f, 330f)
         };
     }
 
-    //Trading Patches
+    //------------------------------------ Trading Patches ------------------------------------
 
+    //Triggers changes to prices when a trade is started
     [HarmonyPatch(typeof(Dialog_Trade), MethodType.Constructor, new Type[] { typeof(Pawn), typeof(ITrader), typeof(bool) })]
     public static class Dialog_TradePatch
     {
         [HarmonyPrefix]
         public static void Dialog_Trade_Prefix(Pawn playerNegotiator, ITrader trader)
         {
+            if (trader.Faction == null)
+            {
+                return;
+            }
             if (AvariceUtility.worldComp == null)
             {
                 AvariceUtility.worldComp = Current.Game.World.GetComponent<WorldComponent_AvariceTradeData>();
@@ -217,18 +227,20 @@ namespace SyrEssentials_Avarice
                 AvariceUtility.worldComp.InitFactions();
                 tradeData = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == trader.Faction);
             }
-            if (AvariceUtility.worldComp.tradeDataList.Any(td => td.faction == trader.Faction && Find.TickManager.TicksGame < td.lastTradeTick + GenDate.TicksPerDay))
+            int ticksSinceLastTrade = tradeData.lastTradeTick;
+            if (Find.TickManager.TicksGame < ticksSinceLastTrade + GenDate.TicksPerDay)
             {
                 return;
             }
             else
             {
-                Log.Message("Dialog_Trade_Prefix");
+                AvariceUtility.MarketSimulation(trader, ticksSinceLastTrade);
             }
             tradeData.lastTradeTick = Find.TickManager.TicksGame;
         }
     }
 
+    //TradePriceType multiplier is used to change prices in general - also turns off that sell price is always <= buyprice if trading module is on
     [HarmonyPatch(typeof(Tradeable), "InitPriceDataIfNeeded")]
     public static class InitPriceDataIfNeededPatch
     {
@@ -237,11 +249,19 @@ namespace SyrEssentials_Avarice
         {
             MethodInfo PriceMultiplier = AccessTools.Method(typeof(PriceTypeUtlity), nameof(PriceTypeUtlity.PriceMultiplier));
             MethodInfo ChangePriceData = AccessTools.Method(typeof(InitPriceDataIfNeededPatch), nameof(InitPriceDataIfNeededPatch.ChangePriceData));
-            foreach (CodeInstruction i in instructions)
-            {
-                yield return i;
 
-                if (i.opcode == OpCodes.Call && (MethodInfo)i.operand == PriceMultiplier)
+            var insts = instructions.ToList();
+            for (int i = 0; i < insts.Count; i++)
+            {
+                if (MatchesSequence(insts, i))
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(AvariceSettings), nameof(AvariceSettings.tradeModule)));
+                    yield return new CodeInstruction(OpCodes.Brtrue, insts[i + 4].operand);
+                }
+
+                yield return insts[i];
+
+                if (insts[i].opcode == OpCodes.Call && (MethodInfo)insts[i].operand == PriceMultiplier)
                 {
                     yield return new CodeInstruction(OpCodes.Ldarg_0);
                     yield return new CodeInstruction(OpCodes.Call, ChangePriceData);
@@ -249,10 +269,19 @@ namespace SyrEssentials_Avarice
                 }
             }
         }
+        public static bool MatchesSequence(List<CodeInstruction> insts, int idx)
+        {
+            return idx < insts.Count - 4 &&
+                   insts[idx].opcode == OpCodes.Ldarg_0 &&
+                   insts[idx + 1].opcode == OpCodes.Ldfld &&
+                   insts[idx + 2].opcode == OpCodes.Ldarg_0 &&
+                   insts[idx + 3].opcode == OpCodes.Ldfld &&
+                   insts[idx + 4].opcode == OpCodes.Blt_Un_S;
+        }
 
         public static float ChangePriceData(Tradeable tradeable)
         {
-            if (!Avarice_Settings.tradeModule)
+            if (!AvariceSettings.tradeModule)
             {
                 return 1f;
             }
@@ -361,12 +390,12 @@ namespace SyrEssentials_Avarice
                 float t = price / normalBuyPrice;
                 if (price < normalBuyPrice)
                 {
-                    GUI.color = Color.Lerp(Color.green, Color.white, (t - Avarice_Settings.minTradeValue) * (1f / (1f - Avarice_Settings.minTradeValue)));
+                    GUI.color = Color.Lerp(Color.green, Color.white, (t - AvariceSettings.minTradeValue) * (1f / (1f - AvariceSettings.minTradeValue)));
                     expensive = -1;
                 }
                 else if (price > normalBuyPrice && t != 1f)
                 {
-                    GUI.color = Color.Lerp(Color.white, Color.red, (Avarice_Settings.maxTradeValue - 1f) * (t - 1f));
+                    GUI.color = Color.Lerp(Color.white, Color.red, (AvariceSettings.maxTradeValue - 1f) * (t - 1f));
                     expensive = 1;
                 }
                 else
@@ -379,12 +408,12 @@ namespace SyrEssentials_Avarice
                 float t = price / normalSellPrice;
                 if (price < normalSellPrice)
                 {
-                    GUI.color = Color.Lerp(Color.red, Color.white, (t - Avarice_Settings.minTradeValue) * (1f / (1f - Avarice_Settings.minTradeValue)));
+                    GUI.color = Color.Lerp(Color.red, Color.white, (t - AvariceSettings.minTradeValue) * (1f / (1f - AvariceSettings.minTradeValue)));
                     expensive = -1;
                 }
                 else if (price > normalSellPrice && t != 1f)
                 {
-                    GUI.color = Color.Lerp(Color.white, Color.green, (Avarice_Settings.maxTradeValue - 1f) * (t - 1f));
+                    GUI.color = Color.Lerp(Color.white, Color.green, (AvariceSettings.maxTradeValue - 1f) * (t - 1f));
                     expensive = 1;
                 }
                 else
@@ -419,17 +448,94 @@ namespace SyrEssentials_Avarice
     public static class GetPriceTooltipPatch
     {
         [HarmonyTranspiler]
-        public static IEnumerable<CodeInstruction> GetPriceTooltip_Transpiler(IEnumerable<CodeInstruction> instructions)
+        public static IEnumerable<CodeInstruction> GetPriceTooltip_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilGen)
         {
-            foreach (CodeInstruction i in instructions)
+            FieldInfo buyFactorField = AccessTools.Field(typeof(AvariceSettings), nameof(AvariceSettings.buyFactor));
+            FieldInfo sellFactorField = AccessTools.Field(typeof(AvariceSettings), nameof(AvariceSettings.sellFactor));
+            Label buySkipLabel = ilGen.DefineLabel();
+            Label sellSkipLabel = ilGen.DefineLabel(); 
+
+            var insts = instructions.ToList();
+            for (int i = 0; i < insts.Count; i++)
             {
-                if (i.opcode == OpCodes.Ldstr && (string)i.operand == "TraderTypePrice")
+                //New translation string so it can be renamed
+                if (insts[i].opcode == OpCodes.Ldstr && (string)insts[i].operand == "TraderTypePrice")
                 {
                     yield return new CodeInstruction(OpCodes.Ldstr, "Avarice_TraderTypePrice");
                     continue;
                 }
-                yield return i;
+                //Replace fixed factor string with field
+                if (insts[i].opcode == OpCodes.Ldc_R4 && (float)insts[i].operand == 1.4f)
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, buyFactorField);
+                    continue;
+                }
+                //Same for selling
+                if (insts[i].opcode == OpCodes.Ldc_R4 && (float)insts[i].operand == 0.6f)
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, sellFactorField);
+                    continue;
+                }
+                //If it's 1 the text should be skipped, so a condition is added
+                if (MatchesBuySequence(insts, i))
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, buyFactorField);
+                    yield return new CodeInstruction(OpCodes.Ldc_R4, 1f);
+                    yield return new CodeInstruction(OpCodes.Beq_S, buySkipLabel);
+                }
+                if (MatchesSellSequence(insts, i))
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, sellFactorField);
+                    yield return new CodeInstruction(OpCodes.Ldc_R4, 1f);
+                    yield return new CodeInstruction(OpCodes.Beq_S, sellSkipLabel);
+                }
+                //Lastly the labels to which the above condition skips to is added
+                if (MatchesBuySkip(insts, i))
+                {
+                    yield return insts[i].WithLabels(buySkipLabel);
+                    continue;
+                }
+                if (MatchesSellSkip(insts, i))
+                {
+                    yield return insts[i].WithLabels(sellSkipLabel);
+                    continue;
+                }
+                yield return insts[i];
             }
+        }
+        public static bool MatchesBuySequence(List<CodeInstruction> insts, int idx)
+        {
+            return idx < insts.Count - 4 &&
+                   insts[idx].opcode == OpCodes.Ldloc_0 &&
+                   insts[idx + 1].opcode == OpCodes.Ldstr &&
+                   insts[idx + 2].opcode == OpCodes.Ldc_R4 && insts[idx + 2].operand as float? == 1.4f &&
+                   insts[idx + 3].opcode == OpCodes.Stloc_2 &&
+                   insts[idx + 4].opcode == OpCodes.Ldloca_S;
+        }
+        public static bool MatchesSellSequence(List<CodeInstruction> insts, int idx)
+        {
+            return idx < insts.Count - 4 &&
+                   insts[idx].opcode == OpCodes.Ldloc_0 &&
+                   insts[idx + 1].opcode == OpCodes.Ldstr &&
+                   insts[idx + 2].opcode == OpCodes.Ldc_R4 && insts[idx + 2].operand as float? == 0.6f &&
+                   insts[idx + 3].opcode == OpCodes.Stloc_2 &&
+                   insts[idx + 4].opcode == OpCodes.Ldloca_S;
+        }
+        public static bool MatchesBuySkip(List<CodeInstruction> insts, int idx)
+        {
+            return idx < insts.Count - 3 &&
+                   insts[idx].opcode == OpCodes.Ldarg_0 &&
+                   insts[idx + 1].opcode == OpCodes.Ldfld && insts[idx +1].operand as FieldInfo == AccessTools.Field(typeof(Tradeable), "priceFactorBuy_TraderPriceType") &&
+                   insts[idx + 2].opcode == OpCodes.Ldc_R4 && insts[idx + 2].operand as float? == 1f &&
+                   insts[idx + 3].opcode == OpCodes.Beq_S;
+        }
+        public static bool MatchesSellSkip(List<CodeInstruction> insts, int idx)
+        {
+            return idx < insts.Count - 3 &&
+                   insts[idx].opcode == OpCodes.Ldarg_0 &&
+                   insts[idx + 1].opcode == OpCodes.Ldfld && insts[idx + 1].operand as FieldInfo == AccessTools.Field(typeof(Tradeable), "priceFactorSell_TraderPriceType") &&
+                   insts[idx + 2].opcode == OpCodes.Ldc_R4 && insts[idx + 2].operand as float? == 1f &&
+                   insts[idx + 3].opcode == OpCodes.Beq_S;
         }
     }
 
@@ -451,11 +557,28 @@ namespace SyrEssentials_Avarice
         [HarmonyPrefix]
         public static void TradeBuyPrefix(Thing toGive, int countToGive, Pawn playerNegotiator)
         {
-            if (toGive.def != ThingDefOf.Silver)
+            if (toGive.def != ThingDefOf.Silver && TradeSession.trader.Faction != null)
             {
                 float currentPriceFactor = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == TradeSession.trader.Faction).itemDataList?.Find(id => id.thingDef == toGive.def)?.priceFactor ?? 1f;
                 float normalBuyPrice = TradeUtility.GetPricePlayerBuy(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerBuys).PriceMultiplier() * currentPriceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 0.714285f */;
+                
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalBuyPrice, TradeSession.trader.Faction, true);
+            }
+        }
+        [HarmonyPostfix]
+        public static void TradeBuyPostfix(Thing toGive, int countToGive, Pawn playerNegotiator)
+        {
+            if (AvariceSettings.legitimateModule && AvariceUtility.SatisfiesLegitimateConditions(toGive.def))
+            {
+                CompLegitimate comp = toGive.TryGetComp<CompLegitimate>();
+                if (comp != null)
+                {
+                    comp.legitimate = true;
+                }
+            }
+            if (AvariceSettings.tradeModule && countToGive != 0 && toGive.def != ThingDefOf.Silver)
+            {
+                AvariceUtility.LockTradeAction(toGive, true);
             }
         }
     }
@@ -473,11 +596,28 @@ namespace SyrEssentials_Avarice
         [HarmonyPrefix]
         public static void TradeSellPrefix(Thing toGive, int countToGive, Pawn playerNegotiator)
         {
-            if (toGive.def != ThingDefOf.Silver)
+            if (toGive.def != ThingDefOf.Silver && TradeSession.trader.Faction != null)
             {
                 float currentPriceFactor = AvariceUtility.worldComp.tradeDataList.Find(td => td.faction == TradeSession.trader.Faction).itemDataList?.Find(id => id.thingDef == toGive.def)?.priceFactor ?? 1f;
                 float normalSellPrice = TradeUtility.GetPricePlayerSell(toGive, TradeSession.trader.TraderKind.PriceTypeFor(toGive.def, TradeAction.PlayerSells).PriceMultiplier() * currentPriceFactor, playerNegotiator.GetStatValue(StatDefOf.TradePriceImprovement, true), TradeSession.trader.TradePriceImprovementOffsetForPlayer) /* 1.66666666f */;
+                
                 AvariceUtility.RegisterTrade(toGive, countToGive, normalSellPrice, TradeSession.trader.Faction, false);
+            }
+        }
+        [HarmonyPostfix]
+        public static void TradeSellPostfix(Thing toGive, int countToGive, Pawn playerNegotiator)
+        {
+            if (AvariceSettings.legitimateModule && AvariceUtility.SatisfiesLegitimateConditions(toGive.def))
+            {
+                CompLegitimate comp = toGive.TryGetComp<CompLegitimate>();
+                if (comp != null)
+                {
+                    comp.legitimate = true;
+                }
+            }
+            if (AvariceSettings.tradeModule && countToGive != 0 && toGive.def != ThingDefOf.Silver)
+            {
+                AvariceUtility.LockTradeAction(toGive, false);
             }
         }
     }
@@ -486,21 +626,72 @@ namespace SyrEssentials_Avarice
     [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.CountToTransfer), MethodType.Setter)]
     public static class CountToTransferPatch
     {
-        [HarmonyPostfix]
-        public static void CountToTransfer_Postfix(ref int __0, ref float ___pricePlayerBuy, Tradeable __instance)
+        [HarmonyPrefix]
+        public static void CountToTransfer_Postfix(ref int value, ref float ___pricePlayerBuy, Tradeable __instance)
         {
-            Thing thing = __instance.AnyThing;
-            if (thingIDToTickCount.TryGetValue(thing.thingIDNumber, out var store) && store.First == GenTicks.TicksGame && store.Second == __0)
+            int thingID = __instance.AnyThing.thingIDNumber;
+            if (thingIDToTickCount.TryGetValue(thingID, out var store) && store.First == GenTicks.TicksGame && store.Second == value)
             {
                 return;
             }
-            thingIDToTickCount[thing.thingIDNumber] = new Pair<int, int>(GenTicks.TicksGame, __0);
+            if (AvariceUtility.GetLockData(__instance.AnyThing) is LockData lockData)
+            {
+                if (lockData.buyingLocked && value > 0)
+                {
+                    value = 0;
+                }
+                if (lockData.sellingLocked && value < 0)
+                {
+                    value = 0;
+                }
+            }
+            thingIDToTickCount[thingID] = new Pair<int, int>(GenTicks.TicksGame, value);
             ___pricePlayerBuy = 0f;
         }
         public static Dictionary<int, Pair<int, int>> thingIDToTickCount = new Dictionary<int, Pair<int, int>>();
     }
 
-    //Caching GetMarketValue to massively reduce impact of UI methods
+    [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.GetMinimumToTransfer))]
+    public static class GetMinimumToTransferPatch
+    {
+        [HarmonyPostfix]
+        public static void GetMinimumToTransfer_Postfix(Tradeable __instance, ref int __result)
+        {
+            if (AvariceUtility.GetLockData(__instance.AnyThing) is LockData lockData)
+            {
+                if (__instance.PositiveCountDirection == TransferablePositiveCountDirection.Destination && lockData.buyingLocked)
+                {
+                    __result = 0;
+                }
+                else if (lockData.sellingLocked)
+                {
+                    __result = 0;
+                }
+            }
+        }
+    }
+    [HarmonyPatch(typeof(Tradeable), nameof(Tradeable.GetMaximumToTransfer))]
+    public static class GetMaximumToTransferPatch
+    {
+        [HarmonyPostfix]
+        public static void GetMaximumToTransfer_Postfix(Tradeable __instance, ref int __result)
+        {
+            if (AvariceUtility.GetLockData(__instance.AnyThing) is LockData lockData)
+            {
+                if (__instance.PositiveCountDirection == TransferablePositiveCountDirection.Destination && lockData.sellingLocked)
+                {
+                    __result = 0;
+                }
+                else if (lockData.buyingLocked)
+                {
+                    __result = 0;
+                }
+            }
+        }
+    }
+
+
+    //Caching GetMarketValue to massively reduce impact of UI methods and replace hardcoded sell/buy penalties
     [HarmonyPatch]
     public static class GetPricePlayerBuyPatch
     {
@@ -513,7 +704,21 @@ namespace SyrEssentials_Avarice
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-            return instructions.MethodReplacer(AccessTools.PropertyGetter(typeof(Thing), nameof(Thing.MarketValue)), AccessTools.Method(typeof(GetPricePlayerBuyPatch), nameof(GetPricePlayerBuyPatch.GetMarketValue_Cached)));
+            instructions = instructions.MethodReplacer(AccessTools.PropertyGetter(typeof(Thing), nameof(Thing.MarketValue)), AccessTools.Method(typeof(GetPricePlayerBuyPatch), nameof(GetPricePlayerBuyPatch.GetMarketValue_Cached)));
+            foreach (CodeInstruction i in instructions)
+            {
+                if (i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 1.4f)
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(AvariceSettings), nameof(AvariceSettings.buyFactor)));
+                    continue;
+                }
+                if (i.opcode == OpCodes.Ldc_R4 && (float)i.operand == 0.6f)
+                {
+                    yield return new CodeInstruction(OpCodes.Ldsfld, AccessTools.Field(typeof(AvariceSettings), nameof(AvariceSettings.sellFactor)));
+                    continue;
+                }
+                yield return i;
+            }
         }
         public static Dictionary<int, Pair<int, float>> thingIDToTickPrice = new Dictionary<int, Pair<int, float>>();
         public static float GetMarketValue_Cached(Thing thing)

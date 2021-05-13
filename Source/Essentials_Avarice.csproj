@@ -65,13 +65,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AvariceClasses.cs" />
     <Compile Include="AvariceCore.cs" />
-    <Compile Include="CompPristine.cs" />
+    <Compile Include="CompLegitimate.cs" />
     <Compile Include="AvariceDefOf.cs" />
     <Compile Include="HarmonyPatches.cs" />
-    <Compile Include="Avarice_HistoryRecorders.cs" />
+    <Compile Include="HistoryRecorders_Avarice.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="StatPart_Pristine.cs" />
+    <Compile Include="StatPart_Legitimate.cs" />
     <Compile Include="AvariceUtility.cs" />
     <Compile Include="TradeData.cs" />
     <Compile Include="TradeDataOrbital.cs" />

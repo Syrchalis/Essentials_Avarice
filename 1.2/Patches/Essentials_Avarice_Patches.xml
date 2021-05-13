@@ -5,17 +5,40 @@
 		<xpath>Defs/StatDef[defName = "SellPriceFactor"]</xpath>
 		<value>
       <parts>
-			  <li Class="SyrEssentials_Avarice.StatPart_Pristine"/>
+			  <li Class="SyrEssentials_Avarice.StatPart_Legitimate"/>
       </parts>
 		</value>
 	</Operation>
 
 	<Operation Class="PatchOperationAdd">
-		<xpath>Defs/ThingDef[@Name = "ApparelNoQualityBase"]/statBases</xpath>
+		<xpath>Defs/StatDef[defName = "TradePriceImprovement"]</xpath>
 		<value>
-			<SellPriceFactor>0.2</SellPriceFactor>
+      <parts>
+			  <li Class="SyrEssentials_Avarice.StatPart_ScaleTradePriceImprovement"/>
+      </parts>
 		</value>
 	</Operation>
+
+	<Operation Class="PatchOperationReplace">
+		<xpath>Defs/StatDef[defName = "TradePriceImprovement"]/skillNeedFactors/li[@Class = "SkillNeed_BaseBonus"]/bonusPerLevel</xpath>
+		<value>
+			<bonusPerLevel>0.01</bonusPerLevel>
+		</value>
+	</Operation>
+
+	<!--<Operation Class="PatchOperationReplace">
+		<xpath>Defs/DifficultyDef[defName = "Hard"]/tradePriceFactorLoss</xpath>
+		<value>
+			<tradePriceFactorLoss>0.05</tradePriceFactorLoss>
+		</value>
+	</Operation>	
+  
+  <Operation Class="PatchOperationReplace">
+		<xpath>Defs/DifficultyDef[defName = "Extreme"]/tradePriceFactorLoss</xpath>
+		<value>
+			<tradePriceFactorLoss>0.10</tradePriceFactorLoss>
+		</value>
+	</Operation>-->
 
 	<Operation Class="PatchOperationRemove">
 		<xpath>Defs/ThingDef[@Name = "BuildingBase"]/statBases/SellPriceFactor</xpath>
@@ -34,5 +57,17 @@
 			<li>Wealth_Combat</li>
 		</value>
 	</Operation>
+
+  <Operation Class="PatchOperationFindMod">
+    <mods>
+      <li>[SYR] Individuality</li>
+    </mods>
+    <match Class="PatchOperationReplace">
+      <xpath>*/TraitDef[defName = "SYR_Haggler"]/degreeDatas/li/statOffsets/TradePriceImprovement</xpath>
+      <value>
+        <TradePriceImprovement>0.25</TradePriceImprovement>
+      </value>
+    </match>
+  </Operation>
 
 </Patch>
